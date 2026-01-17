@@ -1,6 +1,8 @@
 import os
 from fastapi import APIRouter, Depends, Header, HTTPException
 from jose import JWTError, jwt
+from dotenv import load_dotenv
+load_dotenv()
 
 router = APIRouter()
 
