@@ -1,24 +1,30 @@
-from fastapi import APIRouter, Form
-from services.cognito import sign_up_user, login_user, confirm_user
+# routes/auth.py
+import os
+from fastapi import APIRouter, Depends, HTTPException, Header
+from jose import jwt, JWTError
 
 router = APIRouter()
 
-@router.post("/signup")
-def signup(
-    email: str = Form(...),
-    password: str = Form(...),
-    name: str = Form(...)
-):
-    return sign_up_user(email, password, name)
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+SUPABASE_ISSUER = os.getenv("SUPABASE_ISSUER")  # https://<ref>.supabase.co/auth/v1
 
+def require_user(authorization: str = Header(None)):
+  if not authorization or not authorization.startswith("Bearer "):
+    raise HTTPException(status_code=401, detail="Missing bearer token")
 
-@router.post("/login")
-def login(email: str = Form(...), password: str = Form(...)):
-    return login_user(email, password)
+  token = authorization.split(" ", 1)[1]
+  try:
+    payload = jwt.decode(
+      token,
+      SUPABASE_JWT_SECRET,
+      algorithms=["HS256"],
+      issuer=SUPABASE_ISSUER,
+      audience="authenticated",
+    )
+    return payload  # contains sub, email, role, etc.
+  except JWTError:
+    raise HTTPException(status_code=401, detail="Invalid token")
 
-@router.post("/confirm")
-def confirm_signup(
-    email: str = Form(...),
-    code: str = Form(...)
-):
-    return confirm_user(email, code)
+@router.get("/auth/me")
+def me(user=Depends(require_user)):
+  return {"user": user}
