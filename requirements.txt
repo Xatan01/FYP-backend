@@ -8,3 +8,4 @@ PyJWT
 requests
 boto3
 python-multipart
+python-jose[cryptography]
