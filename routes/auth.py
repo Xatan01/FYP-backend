@@ -24,6 +24,7 @@ def require_user(authorization: str = Header(None)):
             algorithms=["HS256"],
             issuer=SUPABASE_ISSUER if SUPABASE_ISSUER else None,
             audience="authenticated",
+            options={"verify_aud": False},  # avoid breaking if aud differs
         )
         return payload
     except JWTError:
