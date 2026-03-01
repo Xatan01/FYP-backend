@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime, timezone
 
 import requests
 from fastapi import HTTPException
@@ -14,6 +15,30 @@ RANGE_CONFIG = {
     "1M": {"interval": "1day", "outputsize": 30},
     "1Y": {"interval": "1week", "outputsize": 52},
 }
+
+INTRADAY_FALLBACK = {
+    "1D": {"interval": "1day", "outputsize": 7},
+    "1W": {"interval": "1day", "outputsize": 14},
+}
+
+
+def _to_timestamp_ms(value: str) -> int | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+
+    candidates = (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    )
+    for fmt in candidates:
+        try:
+            dt = datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+            return int(dt.timestamp() * 1000)
+        except ValueError:
+            continue
+    return None
 
 
 def _get_api_key() -> str:
@@ -67,28 +92,77 @@ def fetch_chart(symbol: str, range_key: str):
         return cached
 
     cfg = RANGE_CONFIG[range_key]
+    api_key = _get_api_key()
     payload = _request(
         "time_series",
         {
             "symbol": symbol,
             "interval": cfg["interval"],
             "outputsize": cfg["outputsize"],
-            "apikey": _get_api_key(),
+            "apikey": api_key,
         },
     )
 
     values = payload.get("values") or []
+    if not values and range_key in INTRADAY_FALLBACK:
+        fallback = INTRADAY_FALLBACK[range_key]
+        payload = _request(
+            "time_series",
+            {
+                "symbol": symbol,
+                "interval": fallback["interval"],
+                "outputsize": fallback["outputsize"],
+                "apikey": api_key,
+            },
+        )
+        values = payload.get("values") or []
     points = []
     for item in reversed(values):
+        open_value = item.get("open")
+        high_value = item.get("high")
+        low_value = item.get("low")
         close_value = item.get("close")
+        volume_value = item.get("volume")
         dt = item.get("datetime")
-        if close_value is None or not dt:
+        if (
+            open_value is None
+            or high_value is None
+            or low_value is None
+            or close_value is None
+            or not dt
+        ):
             continue
         try:
+            open_price = float(open_value)
+            high_price = float(high_value)
+            low_price = float(low_value)
             close = float(close_value)
         except (TypeError, ValueError):
             continue
-        points.append({"t": dt, "c": close})
+        volume = None
+        if volume_value not in (None, ""):
+            try:
+                volume = float(volume_value)
+            except (TypeError, ValueError):
+                volume = None
+        timestamp = _to_timestamp_ms(dt)
+        if timestamp is None:
+            continue
+        points.append(
+            {
+                "timestamp": timestamp,
+                "time": dt,
+                "open": open_price,
+                "high": high_price,
+                "low": low_price,
+                "close": close,
+                "volume": volume,
+                # Keep legacy aliases for compatibility with existing clients.
+                "t": dt,
+                "c": close,
+                "v": volume,
+            }
+        )
 
     if not points:
         raise HTTPException(status_code=404, detail=f"No chart data for symbol {symbol}")
