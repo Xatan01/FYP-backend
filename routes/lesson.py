@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from services.database import get_db
 from sqlalchemy.orm import Session
-from models.content_model import Topic, Subtopic, SubtopicSummary, Content
-from schemas.learn_schema import LessonResponse, SubtopicOut, ContentOut, SubtopicSummaryOut
+from models.Learn.content_model import Topic, Subtopic, SubtopicSummary, Content
+from schemas.Learn.learn_schema import LessonResponse, SubtopicOut, ContentOut, SubtopicSummaryOut
 from routes.auth import require_user
 
 router = APIRouter(dependencies=[Depends(require_user)])
