@@ -147,3 +147,56 @@ def fetch_quote(symbol: str):
     }
     _cache_set(cache_key, result, ttl_seconds=30)
     return result
+
+
+def fetch_quotes(symbols: list[str]):
+    clean_symbols = [str(symbol).upper().strip() for symbol in symbols if str(symbol).strip()]
+    if not clean_symbols:
+        return []
+
+    items = []
+    for symbol in clean_symbols:
+        try:
+            items.append(fetch_quote(symbol))
+        except HTTPException:
+            continue
+    return items
+
+
+def search_symbols(query: str, limit: int = 8):
+    clean_query = str(query or "").strip()
+    if not clean_query:
+        return []
+
+    cache_key = f"search:{clean_query.lower()}:{limit}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    payload = _request(
+        "symbol_search",
+        {
+            "symbol": clean_query,
+            "outputsize": max(1, min(int(limit), 20)),
+            "apikey": _get_api_key(),
+        },
+    )
+
+    rows = payload.get("data") or []
+    results = []
+    for row in rows:
+        symbol = (row.get("symbol") or "").strip().upper()
+        if not symbol:
+            continue
+        results.append(
+            {
+                "symbol": symbol,
+                "name": row.get("instrument_name") or row.get("symbol"),
+                "exchange": row.get("exchange"),
+                "country": row.get("country"),
+                "currency": row.get("currency"),
+            }
+        )
+
+    _cache_set(cache_key, results, ttl_seconds=120)
+    return results
