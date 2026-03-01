@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes import auth
 from routes import lesson
 from routes import quiz
+from routes import market
 from dotenv import load_dotenv
 
 # psycopg async is incompatible with Windows ProactorEventLoop.
@@ -26,4 +27,4 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth")
 app.include_router(lesson.router, prefix="/lesson", tags=["lesson"])
-app.include_router(quiz.router, prefix="/quiz", tags=["quiz"])
+app.include_router(market.router, prefix="/market")

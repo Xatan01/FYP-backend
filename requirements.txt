@@ -12,3 +12,4 @@ python-jose[cryptography]
 asyncpg
 psycopg[binary]
 psycopg2-binary
+asyncpg
