@@ -7,6 +7,7 @@ from routes import auth
 from routes import lesson
 from routes import quiz
 from routes import market
+from routes import market
 from dotenv import load_dotenv
 
 # psycopg async is incompatible with Windows ProactorEventLoop.
