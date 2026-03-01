@@ -1,9 +1,17 @@
+import asyncio
+import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth
 from routes import lesson
 from routes import quiz
 from dotenv import load_dotenv
+
+# psycopg async is incompatible with Windows ProactorEventLoop.
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 load_dotenv()
 
 app = FastAPI()

@@ -1,6 +1,9 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.pool import NullPool
 import os
+import sys
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,13 +21,44 @@ if DATABASE_URL.startswith("https://") or DATABASE_URL.startswith("http://"):
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+# psycopg async + Windows ProactorEventLoop is incompatible.
+if sys.platform.startswith("win") and DATABASE_URL.startswith("postgresql+psycopg://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
+
+engine_kwargs = {"pool_pre_ping": True}
+
+# Supabase PgBouncer in transaction/statement mode can break asyncpg prepared statements.
+# Disable asyncpg statement caching and avoid SQLAlchemy-level pooling on asyncpg URLs.
+if DATABASE_URL.startswith("postgresql+asyncpg://"):
+    split = urlsplit(DATABASE_URL)
+    query = dict(parse_qsl(split.query, keep_blank_values=True))
+    query.setdefault("prepared_statement_cache_size", "0")
+    DATABASE_URL = urlunsplit(
+        (split.scheme, split.netloc, split.path, urlencode(query), split.fragment)
+    )
+
+    engine_kwargs["connect_args"] = {
+        "statement_cache_size": 0,
+    }
+    engine_kwargs["poolclass"] = NullPool
+
+engine = create_async_engine(DATABASE_URL, **engine_kwargs)
+SessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,
+)
 Base = declarative_base()
 
-def get_db():
-    db = SessionLocal()
-    try:
+async def get_db():
+    async with SessionLocal() as db:
         yield db
-    finally:
-        db.close()
+
+
+# Backward-compatible alias for modules still importing get_async_db.
+get_async_db = get_db

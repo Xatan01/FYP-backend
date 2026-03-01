@@ -9,5 +9,6 @@ requests
 boto3
 python-multipart
 python-jose[cryptography]
+asyncpg
 psycopg[binary]
 psycopg2-binary
