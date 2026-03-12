@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import requests
 from fastapi import HTTPException
@@ -36,6 +36,24 @@ def _to_timestamp_ms(value: str) -> int | None:
         try:
             dt = datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
             return int(dt.timestamp() * 1000)
+        except ValueError:
+            continue
+    return None
+
+
+def _to_date(value: str) -> date | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+
+    candidates = (
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+    )
+    for fmt in candidates:
+        try:
+            return datetime.strptime(raw, fmt).date()
         except ValueError:
             continue
     return None
@@ -235,6 +253,57 @@ def fetch_quotes(symbols: list[str]):
         except HTTPException:
             continue
     return items
+
+
+def fetch_latest_daily_ohlcv(symbol: str):
+    symbol = symbol.upper().strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Symbol is required")
+
+    payload = _request(
+        "time_series",
+        {
+            "symbol": symbol,
+            "interval": "1day",
+            "outputsize": 1,
+            "apikey": _get_api_key(),
+        },
+    )
+
+    values = payload.get("values") or []
+    if not values:
+        raise HTTPException(status_code=404, detail=f"No daily OHLCV data for symbol {symbol}")
+
+    latest = values[0]
+    price_date = _to_date(latest.get("datetime"))
+    if price_date is None:
+        raise HTTPException(status_code=502, detail=f"Invalid daily date for symbol {symbol}")
+
+    try:
+        open_price = float(latest.get("open"))
+        high_price = float(latest.get("high"))
+        low_price = float(latest.get("low"))
+        close_price = float(latest.get("close"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=502, detail=f"Invalid OHLC values for symbol {symbol}")
+
+    volume_raw = latest.get("volume")
+    volume_value = None
+    if volume_raw not in (None, ""):
+        try:
+            volume_value = int(float(volume_raw))
+        except (TypeError, ValueError):
+            volume_value = None
+
+    return {
+        "symbol": symbol,
+        "price_date": price_date,
+        "open": open_price,
+        "high": high_price,
+        "low": low_price,
+        "close": close_price,
+        "volume": volume_value,
+    }
 
 
 def search_symbols(query: str, limit: int = 8):
