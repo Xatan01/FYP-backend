@@ -4,10 +4,15 @@ import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth
+from routes import consultation
+from routes import friends
 from routes import inference
 from routes import lesson
+from routes import leaderboard
 from routes import market
+from routes import profile
 from routes import quiz
+from routes import shop
 from routes import trading_journal
 from routes import virtual_market
 from services.model_inference import validate_model_env
@@ -34,6 +39,11 @@ app.include_router(auth.router, prefix="/auth")
 app.include_router(lesson.router, prefix="/lesson", tags=["lesson"])
 app.include_router(quiz.router, prefix="/quiz", tags=["quiz"])
 app.include_router(market.router, prefix="/market")
+app.include_router(leaderboard.router, prefix="/leaderboard")
+app.include_router(friends.router, prefix="/friends")
+app.include_router(profile.router, prefix="/profile")
+app.include_router(consultation.router, prefix="/consultation")
+app.include_router(shop.router, prefix="/shop")
 app.include_router(virtual_market.router, prefix="/virtual-market")
 app.include_router(trading_journal.router, prefix="/trading-journal")
 app.include_router(inference.router)
