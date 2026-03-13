@@ -106,11 +106,19 @@ async def get_explanation(
 
 
 @router.get("/{subtopic_id}/summary", response_model=SubtopicSummaryOut)
-async def get_summary(subtopic_id: int, db: AsyncSession = Depends(get_db)):
+async def get_summary(
+    subtopic_id: int,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_user),
+):
     """
     Get the latest published summary for a subtopic.
     """
-    summary = await ProgressService.get_subtopic_summary(db, subtopic_id)
+    summary = await ProgressService.get_subtopic_summary(
+        db,
+        subtopic_id,
+        user["sub"],
+    )
     return SubtopicSummaryOut(
         summary_id=summary.summary_id,
         topic_id=summary.topic_id,

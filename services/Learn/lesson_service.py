@@ -6,6 +6,7 @@ from models.Learn.content_model import Content, Subtopic, SubtopicSummary, Topic
 from models.Learn.user_learn_model import SubtopicProgressUser
 from schemas.Learn.learn_schema import LessonResponse, SubtopicOut, ContentOut, SubtopicSummaryOut
 from datetime import datetime, timezone
+from services.Learn.progress_service import ProgressService
 
 class LessonService:
 
@@ -35,6 +36,10 @@ class LessonService:
         if progress:
             return progress
 
+        await ProgressService.ensure_subtopic_can_unlock(
+            db, user_id, topic_id, subtopic_id
+        )
+
         progress = SubtopicProgressUser(
             user_id=user_id,
             topic_id=topic_id,
@@ -49,12 +54,14 @@ class LessonService:
         return progress
 
     @staticmethod
-    async def get_lesson(db: AsyncSession, topic_id: int) -> LessonResponse:
+    async def get_lesson(db: AsyncSession, user_id: str, topic_id: int) -> LessonResponse:
         topic = (await db.execute(select(Topic).where(Topic.topic_id == topic_id))).scalar_one_or_none()
         if not topic:
             raise HTTPException(status_code=404, detail="Topic not found")
 
-        subtopics = (await db.execute(select(Subtopic).where(Subtopic.topic_id == topic_id).order_by(Subtopic.subtopic_id.asc()))).scalars().all()
+        subtopics, state_by_subtopic = await ProgressService.get_topic_unlock_state(
+            db, user_id, topic_id
+        )
         subtopic_ids = [s.subtopic_id for s in subtopics]
 
         # Fetch contents
@@ -92,6 +99,8 @@ class LessonService:
 
         subtopic_items = []
         for s in subtopics:
+            state = state_by_subtopic.get(s.subtopic_id, {})
+            is_unlocked = bool(state.get("is_unlocked"))
             contents_list = [
                 ContentOut(
                     content_id=c.content_id,
@@ -101,8 +110,8 @@ class LessonService:
                     summary=c.summary,
                     content_json=c.content_json,
                 ) for c in contents_by_subtopic.get(s.subtopic_id, [])
-            ]
-            summary_obj = summaries_by_subtopic.get(s.subtopic_id)
+            ] if is_unlocked else []
+            summary_obj = summaries_by_subtopic.get(s.subtopic_id) if is_unlocked else None
             summary_out = SubtopicSummaryOut(
                 summary_id=summary_obj.summary_id,
                 topic_id=summary_obj.topic_id,
@@ -116,6 +125,11 @@ class LessonService:
                     subtopic_id=s.subtopic_id,
                     topic_id=s.topic_id,
                     subtopic_name=s.subtopic_name,
+                    is_unlocked=is_unlocked,
+                    can_unlock=bool(state.get("can_unlock")),
+                    requires_profiling=bool(state.get("requires_profiling", True)),
+                    stage=state.get("stage"),
+                    is_completed=bool(state.get("is_completed")),
                     contents=contents_list,
                     subtopic_summary=summary_out,
                 )

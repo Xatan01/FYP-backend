@@ -22,6 +22,11 @@ class SubtopicOut(BaseModel):
     subtopic_id: int
     topic_id: int
     subtopic_name: str
+    is_unlocked: bool = False
+    can_unlock: bool = False
+    requires_profiling: bool = True
+    stage: Optional[str] = None
+    is_completed: bool = False
     contents: List[ContentOut]
     subtopic_summary: Optional[SubtopicSummaryOut] = None
 

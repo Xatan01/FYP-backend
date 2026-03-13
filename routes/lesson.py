@@ -20,5 +20,9 @@ async def init_progress(
 
 
 @router.get("/{topic_id}", response_model=LessonResponse)
-async def get_lesson(topic_id: int, db: AsyncSession = Depends(get_db)):
-    return await LessonService.get_lesson(db, topic_id)
+async def get_lesson(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_user),
+):
+    return await LessonService.get_lesson(db, user["sub"], topic_id)
