@@ -147,6 +147,13 @@ class QuizService:
         if progress.stage not in {"content", "quiz"}:
             raise HTTPException(409, "Quiz not allowed at this stage")
 
+        await ProgressService.ensure_subtopic_is_unlocked(
+            db,
+            user_id,
+            progress.topic_id,
+            subtopic_id,
+        )
+
         attempt_number = await QuizService._get_attempt_number(
             db,
             user_id,
@@ -191,6 +198,13 @@ class QuizService:
         ).scalar_one_or_none()
         if not progress or progress.stage != "quiz":
             raise HTTPException(409, "Quiz not allowed at this stage")
+
+        await ProgressService.ensure_subtopic_is_unlocked(
+            db,
+            user_id,
+            progress.topic_id,
+            subtopic_id,
+        )
 
         attempt_number = await QuizService._get_attempt_number(
             db,

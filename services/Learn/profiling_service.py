@@ -6,8 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.Learn.quiz_model import Quiz
+from models.Learn.content_model import Subtopic
 from models.Learn.user_learn_model import ProfilingResults, SubtopicProgressUser
 from services.Learn.answer_utils import is_selected_correct
+from services.Learn.progress_service import ProgressService
 
 DIFFICULTY_LEVELS = ("basic", "core", "mastery")
 
@@ -42,6 +44,21 @@ class ProfilingService:
     @staticmethod
     async def start(db: AsyncSession, user_id: str, subtopic_id: int):
         """Return a deterministic set of profiling questions (3 per difficulty)."""
+        subtopic = (
+            await db.execute(
+                select(Subtopic).where(Subtopic.subtopic_id == subtopic_id)
+            )
+        ).scalar_one_or_none()
+        if not subtopic:
+            raise HTTPException(status_code=404, detail="Subtopic not found")
+
+        await ProgressService.ensure_subtopic_can_unlock(
+            db,
+            user_id,
+            subtopic.topic_id,
+            subtopic_id,
+        )
+
         questions: dict[str, list[Quiz]] = {}
         for diff in DIFFICULTY_LEVELS:
             candidates = (
@@ -80,6 +97,13 @@ class ProfilingService:
 
         if not progress or progress.stage != "profiling":
             raise HTTPException(409, "Profiling not allowed")
+
+        await ProgressService.ensure_subtopic_can_unlock(
+            db,
+            user_id,
+            progress.topic_id,
+            subtopic_id,
+        )
 
         normalized_answers = _normalize_answers(answers)
         expected_by_difficulty = await ProfilingService.start(db, user_id, subtopic_id)

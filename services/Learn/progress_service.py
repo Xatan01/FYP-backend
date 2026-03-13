@@ -47,8 +47,8 @@ class ProgressService:
         previous_completed = True
         for index, subtopic in enumerate(subtopics):
             progress = progress_by_subtopic.get(subtopic.subtopic_id)
-            can_unlock = bool(index == 0 or previous_completed or progress is not None)
-            is_unlocked = ProgressService._is_unlocked(progress)
+            can_unlock = bool(index == 0 or previous_completed)
+            is_unlocked = bool(can_unlock and ProgressService._is_unlocked(progress))
             is_completed = ProgressService._is_completed(progress)
             state_by_subtopic[subtopic.subtopic_id] = {
                 "progress": progress,
@@ -77,6 +77,23 @@ class ProgressService:
             raise HTTPException(
                 status_code=403,
                 detail="Subtopic is locked until the previous subtopic is completed",
+            )
+
+    @staticmethod
+    async def ensure_subtopic_is_unlocked(
+        db: AsyncSession,
+        user_id: str,
+        topic_id: int,
+        subtopic_id: int,
+    ) -> None:
+        _, state_by_subtopic = await ProgressService.get_topic_unlock_state(
+            db, user_id, topic_id
+        )
+        state = state_by_subtopic.get(subtopic_id)
+        if not state or not state["is_unlocked"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Subtopic is locked until profiling and the previous completion requirements are met",
             )
 
     @staticmethod

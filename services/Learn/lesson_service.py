@@ -25,6 +25,10 @@ class LessonService:
                 detail="Subtopic does not belong to topic",
             )
 
+        await ProgressService.ensure_subtopic_can_unlock(
+            db, user_id, topic_id, subtopic_id
+        )
+
         progress = (
             await db.execute(
                 select(SubtopicProgressUser).where(
@@ -35,10 +39,6 @@ class LessonService:
         ).scalar_one_or_none()
         if progress:
             return progress
-
-        await ProgressService.ensure_subtopic_can_unlock(
-            db, user_id, topic_id, subtopic_id
-        )
 
         progress = SubtopicProgressUser(
             user_id=user_id,
