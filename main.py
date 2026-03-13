@@ -15,6 +15,7 @@ from routes import quiz
 from routes import shop
 from routes import trading_journal
 from routes import virtual_market
+from services.news_scheduler import run_daily_news_sync_forever
 from services.model_inference import validate_model_env
 from services.vm_scheduler import run_daily_price_sync_forever
 from dotenv import load_dotenv
@@ -57,14 +58,16 @@ def startup_checks():
 @app.on_event("startup")
 async def start_virtual_market_scheduler():
     app.state.vm_scheduler_task = asyncio.create_task(run_daily_price_sync_forever())
+    app.state.news_scheduler_task = asyncio.create_task(run_daily_news_sync_forever())
 
 
 @app.on_event("shutdown")
 async def stop_virtual_market_scheduler():
-    task = getattr(app.state, "vm_scheduler_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    for attr in ("vm_scheduler_task", "news_scheduler_task"):
+        task = getattr(app.state, attr, None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass

@@ -1,8 +1,12 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from routes.auth import require_user
+from schemas.market_news_schema import MarketNewsOut, MarketNewsSyncOut
+from services.database import get_db
+from services.market_news_service import MarketNewsService
 from services.twelvedata import fetch_chart, fetch_quote, fetch_quotes, search_symbols
 
 router = APIRouter(dependencies=[Depends(require_user)], tags=["market"])
@@ -53,3 +57,20 @@ def market_quotes(symbols: str = Query(...)):
         "items": quotes,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get("/news", response_model=MarketNewsOut)
+async def market_news(
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    return await MarketNewsService.get_latest_news(db, limit=limit)
+
+
+@router.post("/admin/sync-news", response_model=MarketNewsSyncOut)
+async def sync_market_news(
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    db: AsyncSession = Depends(get_db),
+):
+    MarketNewsService.validate_sync_admin_key(x_admin_key)
+    return await MarketNewsService.sync_daily_news(db)
