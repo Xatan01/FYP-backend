@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -16,6 +17,10 @@ from services.gamification_service import GamificationService
 
 VALID_DIFFICULTIES = {"basic", "core", "mastery"}
 MAX_ATTEMPTS = 3
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _stable_pick(items, key_fn, limit: int, seed: str):
@@ -223,6 +228,7 @@ class QuizService:
             correct_count=0,
             passed=False,
             points_awarded=0,
+            created_at=_now_utc(),
         )
         db.add(attempt)
         await db.flush()
@@ -254,6 +260,7 @@ class QuizService:
         if attempt.passed or attempt_number >= MAX_ATTEMPTS:
             progress.stage = "explanation"
 
+        await GamificationService.record_quiz_attempt_xp(db, attempt)
         await db.commit()
 
         retries_remaining = max(0, MAX_ATTEMPTS - attempt_number)

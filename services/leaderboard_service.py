@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.Learn.user_learn_model import QuizAttempts
 from models.friends_model import SocialFriendship, SocialUserProfile
 from models.virtual_market_model import VMPriceDaily, VMUserPosition, VMUserWallet
+from services.gamification_service import GamificationService
 
 
 def _now_utc() -> datetime:
@@ -62,17 +63,22 @@ class LeaderboardService:
 
         user_ids = [profile.user_id for profile in profiles]
 
-        xp_rows = (
-            await db.execute(
-                select(
-                    QuizAttempts.user_id,
-                    func.coalesce(func.sum(QuizAttempts.points_awarded), 0).label("xp"),
+        exp_stats_map = await GamificationService.get_exp_stats_map(db, user_ids)
+        missing_user_ids = [user_id for user_id in user_ids if user_id not in exp_stats_map]
+
+        xp_map = {user_id: int(stats.total_xp or 0) for user_id, stats in exp_stats_map.items()}
+        if missing_user_ids:
+            xp_rows = (
+                await db.execute(
+                    select(
+                        QuizAttempts.user_id,
+                        func.coalesce(func.sum(QuizAttempts.points_awarded), 0).label("xp"),
+                    )
+                    .where(QuizAttempts.user_id.in_(missing_user_ids))
+                    .group_by(QuizAttempts.user_id)
                 )
-                .where(QuizAttempts.user_id.in_(user_ids))
-                .group_by(QuizAttempts.user_id)
-            )
-        ).all()
-        xp_map = {row.user_id: int(row.xp or 0) for row in xp_rows}
+            ).all()
+            xp_map.update({row.user_id: int(row.xp or 0) for row in xp_rows})
 
         wallet_rows = (
             await db.execute(
