@@ -23,3 +23,19 @@ class ProfileSettingsUpdateIn(BaseModel):
     market_alerts_enabled: Optional[bool] = None
     social_alerts_enabled: Optional[bool] = None
     lesson_reminders_enabled: Optional[bool] = None
+
+
+class ProfileGameSummaryOut(BaseModel):
+    user_id: UUID
+    username: str
+    xp: int
+    streak: int
+    league: str
+    league_key: str
+    league_min_xp: int
+    next_league: Optional[str] = None
+    next_league_key: Optional[str] = None
+    next_league_min_xp: Optional[int] = None
+    xp_to_next_league: int
+    league_progress_percent: int
+    last_activity_at: Optional[datetime] = None

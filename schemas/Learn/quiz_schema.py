@@ -17,10 +17,13 @@ class QuizSubmitResultOut(BaseModel):
     points_awarded: int
     required_correct: int
     total_questions: int
+    can_retry: bool
+    retries_remaining: int
+    retry_xp_multiplier: float
+    next_retry_xp_multiplier: float | None = None
 
 
 class ExplanationItemOut(BaseModel):
     question_id: int
     source: str
     is_correct: bool
-

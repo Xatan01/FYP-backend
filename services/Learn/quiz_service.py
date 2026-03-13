@@ -12,8 +12,10 @@ from models.Learn.user_learn_model import (
     SubtopicProgressUser,
 )
 from services.Learn.answer_utils import is_selected_correct
+from services.gamification_service import GamificationService
 
 VALID_DIFFICULTIES = {"basic", "core", "mastery"}
+MAX_ATTEMPTS = 3
 
 
 def _stable_pick(items, key_fn, limit: int, seed: str):
@@ -146,7 +148,7 @@ class QuizService:
             subtopic_id,
             difficulty,
         )
-        if attempt_number > 2:
+        if attempt_number > MAX_ATTEMPTS:
             raise HTTPException(409, "Maximum attempts reached")
 
         standard_questions, llm_questions, _ = await QuizService._build_expected_quiz(
@@ -191,7 +193,7 @@ class QuizService:
             subtopic_id,
             difficulty,
         )
-        if attempt_number > 2:
+        if attempt_number > MAX_ATTEMPTS:
             raise HTTPException(409, "Maximum attempts reached")
 
         _, _, expected_questions = await QuizService._build_expected_quiz(
@@ -242,12 +244,25 @@ class QuizService:
 
         attempt.correct_count = total_correct
         attempt.passed = total_correct >= 4
-        attempt.points_awarded = total_correct * 10
+        attempt.points_awarded = GamificationService.calculate_quiz_xp(
+            total_correct,
+            difficulty,
+            attempt.passed,
+            attempt_number=attempt_number,
+        )
 
-        if attempt.passed or attempt_number == 3:
+        if attempt.passed or attempt_number >= MAX_ATTEMPTS:
             progress.stage = "explanation"
 
         await db.commit()
+
+        retries_remaining = max(0, MAX_ATTEMPTS - attempt_number)
+        can_retry = (not attempt.passed) and retries_remaining > 0
+        next_retry_multiplier = (
+            GamificationService.retry_xp_multiplier(attempt_number + 1)
+            if can_retry
+            else None
+        )
 
         return {
             "attempt_number": attempt_number,
@@ -256,6 +271,10 @@ class QuizService:
             "points_awarded": attempt.points_awarded,
             "required_correct": 4,
             "total_questions": len(expected_ids),
+            "can_retry": can_retry,
+            "retries_remaining": retries_remaining,
+            "retry_xp_multiplier": GamificationService.retry_xp_multiplier(attempt_number),
+            "next_retry_xp_multiplier": next_retry_multiplier,
         }
 
     @staticmethod
