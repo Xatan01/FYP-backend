@@ -10,12 +10,26 @@ def get_ollama_url() -> str:
     return os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").strip()
 
 
-def get_model_hint_finetuned() -> str:
-    return os.getenv("MODEL_HINT_FINETUNED", "finance-hint-v3").strip()
-
-
 def get_model_gemma_original() -> str:
-    return os.getenv("MODEL_GEMMA_ORIGINAL", "gemma-3-12b-it-Q6_K").strip()
+    return (
+        os.getenv("MODEL_GEMMA_ORIGINAL", "").strip()
+        or os.getenv("OLLAMA_HINT_MODEL", "").strip()
+        or "gemma3:12b"
+    )
+
+
+def get_ollama_timeout_seconds() -> float:
+    raw = os.getenv("OLLAMA_TIMEOUT_SECONDS", "").strip()
+    if not raw:
+        return 90.0
+    try:
+        return max(float(raw), 1.0)
+    except ValueError:
+        return 90.0
+
+
+def get_ollama_keep_alive() -> str:
+    return os.getenv("OLLAMA_KEEP_ALIVE", "10m").strip() or "10m"
 
 
 def get_gemma_model_path() -> str:
@@ -28,13 +42,10 @@ def get_gemma_model_path() -> str:
 
 def validate_model_env() -> None:
     ollama_url = get_ollama_url()
-    hint_model = get_model_hint_finetuned()
     gemma_model = get_model_gemma_original()
 
     if not ollama_url:
         raise RuntimeError("OLLAMA_URL is empty.")
-    if not hint_model:
-        raise RuntimeError("MODEL_HINT_FINETUNED is empty.")
     if not gemma_model and not get_gemma_model_path():
         raise RuntimeError("Set MODEL_GEMMA_ORIGINAL or GEMMA_MODEL_PATH.")
 
@@ -47,14 +58,24 @@ def _ask_ollama_model(prompt: str, model_name: str) -> str:
         raise HTTPException(status_code=500, detail="Model name is not configured.")
 
     url = f"{get_ollama_url().rstrip('/')}/api/generate"
+    options = {
+        "num_ctx": _int_env("OLLAMA_NUM_CTX", 2048),
+        "temperature": _float_env("OLLAMA_TEMPERATURE", 0.2),
+    }
+    num_predict = _optional_int_env("OLLAMA_NUM_PREDICT")
+    if num_predict is not None:
+        options["num_predict"] = num_predict
+
     payload = {
         "model": model_name,
         "prompt": clean_prompt,
         "stream": False,
+        "keep_alive": get_ollama_keep_alive(),
+        "options": options,
     }
 
     try:
-        res = requests.post(url, json=payload, timeout=30)
+        res = requests.post(url, json=payload, timeout=get_ollama_timeout_seconds())
     except requests.Timeout:
         raise HTTPException(status_code=504, detail="Ollama request timed out.")
     except requests.RequestException as exc:
@@ -91,6 +112,26 @@ def _int_env(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _optional_int_env(name: str) -> int | None:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
 
 
 def _load_llama_class():
@@ -134,10 +175,6 @@ def _get_llama():
     return _LLAMA_INSTANCE
 
 
-def ask_hint_model(prompt: str) -> str:
-    return _ask_ollama_model(prompt, get_model_hint_finetuned())
-
-
 def ask_gemma_model(prompt: str) -> str:
     # If a local GGUF path is configured, prefer local llama.cpp inference.
     gemma_path = get_gemma_model_path()
@@ -168,7 +205,6 @@ def ask_gemma_model(prompt: str) -> str:
 
 def get_models_health() -> dict:
     ollama_url = get_ollama_url()
-    hint_model = get_model_hint_finetuned()
     gemma_model = get_model_gemma_original()
     gemma_path = get_gemma_model_path()
     ollama_reachable = False
@@ -203,7 +239,6 @@ def get_models_health() -> dict:
     return {
         "url": ollama_url,
         "reachable": ollama_reachable,
-        "hint_model": hint_model,
         "gemma_model": gemma_model,
         "local_gemma": local_gemma,
         "error": ollama_error,
