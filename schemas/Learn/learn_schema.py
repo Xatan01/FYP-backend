@@ -26,6 +26,8 @@ class SubtopicOut(BaseModel):
     can_unlock: bool = False
     requires_profiling: bool = True
     stage: Optional[str] = None
+    starting_difficulty: Optional[str] = None
+    current_difficulty: Optional[str] = None
     is_completed: bool = False
     contents: List[ContentOut]
     subtopic_summary: Optional[SubtopicSummaryOut] = None

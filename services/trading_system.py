@@ -4,6 +4,7 @@ import argparse
 import types
 import warnings
 import pickle
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -320,6 +321,25 @@ def get_all_signals(ticker: str, model_dir: Path = MODEL_DIR) -> dict:
         signals["conservative"]["signal"] # "HOLD"
     """
     return {p: get_signal(ticker, personality=p, model_dir=model_dir) for p in PERSONALITIES}
+
+
+def get_signal_bundle_meta(personality: str, model_dir: Path = MODEL_DIR) -> dict:
+    bundle = _load_bundle(personality, model_dir)
+    path = model_dir / f"{personality}.pkl"
+    benchmark_last_date = bundle.get("benchmark_last_date")
+    if hasattr(benchmark_last_date, "date"):
+        benchmark_last_date = benchmark_last_date.date()
+
+    bundle_updated_at = None
+    if path.exists():
+        bundle_updated_at = datetime.fromtimestamp(path.stat().st_mtime)
+
+    return {
+        "personality": personality,
+        "bundle_updated_at": bundle_updated_at,
+        "benchmark_last_date": benchmark_last_date,
+        "cfg": bundle.get("cfg", {}),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

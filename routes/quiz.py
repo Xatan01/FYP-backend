@@ -72,7 +72,7 @@ async def start_quiz(
     user=Depends(require_user),
 ):
     """
-    Return 5 standard questions + up to 2 LLM questions.
+    Return 4 standard questions + up to 2 LLM questions.
     """
     questions = await QuizService.start(db, user["sub"], subtopic_id, difficulty)
     return [_to_question_out(question) for question in questions]

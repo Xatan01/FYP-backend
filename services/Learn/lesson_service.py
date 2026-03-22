@@ -129,6 +129,8 @@ class LessonService:
                     can_unlock=bool(state.get("can_unlock")),
                     requires_profiling=bool(state.get("requires_profiling", True)),
                     stage=state.get("stage"),
+                    starting_difficulty=state.get("progress").starting_difficulty if state.get("progress") else None,
+                    current_difficulty=state.get("progress").current_difficulty if state.get("progress") else None,
                     is_completed=bool(state.get("is_completed")),
                     contents=contents_list,
                     subtopic_summary=summary_out,

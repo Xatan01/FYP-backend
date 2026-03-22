@@ -13,10 +13,15 @@ from models.Learn.user_learn_model import (
     SubtopicProgressUser,
 )
 from services.Learn.answer_utils import is_selected_correct
+from services.Learn.progress_service import ProgressService
 from services.gamification_service import GamificationService
 
 VALID_DIFFICULTIES = {"basic", "core", "mastery"}
 MAX_ATTEMPTS = 3
+STANDARD_QUESTION_LIMIT = 4
+LLM_QUESTION_LIMIT = 2
+MIN_STANDARD_CORRECT = 3
+MIN_TOTAL_CORRECT = 4
 
 
 def _now_utc() -> datetime:
@@ -47,6 +52,17 @@ def _normalize_answers(answers: dict) -> dict[int, str]:
             raise HTTPException(status_code=400, detail=f"Duplicate question id '{qid}'")
         normalized[qid] = selected
     return normalized
+
+
+def _required_standard_correct(standard_question_count: int) -> int:
+    return min(MIN_STANDARD_CORRECT, max(0, int(standard_question_count or 0)))
+
+
+def _required_total_correct(total_question_count: int) -> int:
+    total = max(0, int(total_question_count or 0))
+    if total <= STANDARD_QUESTION_LIMIT:
+        return _required_standard_correct(total)
+    return min(MIN_TOTAL_CORRECT, total)
 
 
 class QuizService:
@@ -100,7 +116,7 @@ class QuizService:
         standard_questions = _stable_pick(
             standard_candidates,
             lambda q: q.question_id,
-            5,
+            STANDARD_QUESTION_LIMIT,
             standard_seed,
         )
 
@@ -117,7 +133,12 @@ class QuizService:
             .all()
         )
         llm_seed = f"quiz:{user_id}:{subtopic_id}:{difficulty}:{attempt_number}:llm"
-        llm_questions = _stable_pick(llm_candidates, lambda q: q.llm_question_id, 2, llm_seed)
+        llm_questions = _stable_pick(
+            llm_candidates,
+            lambda q: q.llm_question_id,
+            LLM_QUESTION_LIMIT,
+            llm_seed,
+        )
 
         # Use negative IDs for LLM questions to avoid clashes with standard IDs.
         expected = {}
@@ -130,7 +151,7 @@ class QuizService:
 
     @staticmethod
     async def start(db: AsyncSession, user_id: str, subtopic_id: int, difficulty: str):
-        """Return 5 deterministic standard questions + up to 2 deterministic LLM questions."""
+        """Return 4 deterministic standard questions + up to 2 deterministic LLM questions."""
         if difficulty not in VALID_DIFFICULTIES:
             raise HTTPException(status_code=400, detail="Invalid difficulty")
 
@@ -232,6 +253,7 @@ class QuizService:
             )
 
         total_correct = 0
+        standard_correct = 0
         attempt = QuizAttempts(
             user_id=user_id,
             topic_id=progress.topic_id,
@@ -252,6 +274,8 @@ class QuizService:
             selected = normalized_answers[question_id]
             is_correct = is_selected_correct(selected, question.content_json)
             total_correct += int(is_correct)
+            if source == "standard":
+                standard_correct += int(is_correct)
 
             db.add(
                 QuizAttemptQuestions(
@@ -262,8 +286,18 @@ class QuizService:
                 )
             )
 
+        standard_question_count = sum(
+            1 for source, _question in expected_questions.values() if source == "standard"
+        )
+        total_question_count = len(expected_ids)
+        required_standard = _required_standard_correct(standard_question_count)
+        required_total = _required_total_correct(total_question_count)
+
         attempt.correct_count = total_correct
-        attempt.passed = total_correct >= 4
+        attempt.passed = (
+            standard_correct >= required_standard
+            and total_correct >= required_total
+        )
         attempt.points_awarded = GamificationService.calculate_quiz_xp(
             total_correct,
             difficulty,
@@ -289,9 +323,12 @@ class QuizService:
             "attempt_number": attempt_number,
             "passed": attempt.passed,
             "total_correct": total_correct,
+            "standard_correct": standard_correct,
+            "standard_questions": standard_question_count,
+            "required_standard_correct": required_standard,
             "points_awarded": attempt.points_awarded,
-            "required_correct": 4,
-            "total_questions": len(expected_ids),
+            "required_correct": required_total,
+            "total_questions": total_question_count,
             "can_retry": can_retry,
             "retries_remaining": retries_remaining,
             "retry_xp_multiplier": GamificationService.retry_xp_multiplier(attempt_number),
@@ -301,6 +338,19 @@ class QuizService:
     @staticmethod
     async def get_explanation(db: AsyncSession, user_id: str, subtopic_id: int, difficulty: str):
         """Return all answered questions + correctness for explanation stage."""
+        progress = (
+            await db.execute(
+                select(SubtopicProgressUser).where(
+                    SubtopicProgressUser.user_id == user_id,
+                    SubtopicProgressUser.subtopic_id == subtopic_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not progress:
+            raise HTTPException(status_code=409, detail="Progress not initialized")
+        if progress.stage not in {"explanation", "summary", "completed"}:
+            raise HTTPException(status_code=409, detail="Explanation not available at this stage")
+
         attempts = (
             (
                 await db.execute(

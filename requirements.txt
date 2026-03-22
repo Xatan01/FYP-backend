@@ -1,15 +1,25 @@
-gitignore
-dotenv
-fastapi 
-uvicorn 
-sqlalchemy 
-python-dotenv 
-PyJWT 
-requests
-boto3
+fastapi
+uvicorn
+pydantic
+python-dotenv
 python-multipart
 python-jose[cryptography]
+requests
+
+sqlalchemy
 asyncpg
-psycopg[binary]
-psycopg2-binary
-asyncpg
+
+numpy
+pandas
+scikit-learn
+scipy
+yfinance
+
+# Optional for local GGUF inference via GEMMA_MODEL_PATH
+# llama-cpp-python
+
+# Optional training extras for the trader pipeline
+# xgboost
+# lightgbm
+# hmmlearn
+# matplotlib

@@ -14,6 +14,9 @@ class QuizSubmitResultOut(BaseModel):
     attempt_number: int
     passed: bool
     total_correct: int
+    standard_correct: int
+    standard_questions: int
+    required_standard_correct: int
     points_awarded: int
     required_correct: int
     total_questions: int

@@ -4,6 +4,7 @@ import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth
+from routes import ai_trader
 from routes import consultation
 from routes import friends
 from routes import inference
@@ -37,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/auth")
+app.include_router(ai_trader.router, prefix="/ai-trader")
 app.include_router(lesson.router, prefix="/lesson", tags=["lesson"])
 app.include_router(quiz.router, prefix="/quiz", tags=["quiz"])
 app.include_router(market.router, prefix="/market")
