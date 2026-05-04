@@ -18,8 +18,8 @@ yfinance
 # Optional for local GGUF inference via GEMMA_MODEL_PATH
 # llama-cpp-python
 
-# Optional training extras for the trader pipeline
-# xgboost
-# lightgbm
-# hmmlearn
-# matplotlib
+# AI Trader Personalities dependencies
+xgboost
+lightgbm
+hmmlearn
+matplotlib
