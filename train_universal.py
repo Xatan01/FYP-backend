@@ -3,6 +3,7 @@
 from services.train_universal import (
     BEARISH_SIGNAL,
     BULLISH_SIGNAL,
+    EnsembleModel,
     NEUTRAL_SIGNAL,
     RegimeFilter,
     _train_universal_ensemble,
@@ -16,6 +17,7 @@ from services.train_universal import (
 __all__ = [
     "BEARISH_SIGNAL",
     "BULLISH_SIGNAL",
+    "EnsembleModel",
     "NEUTRAL_SIGNAL",
     "RegimeFilter",
     "_train_universal_ensemble",
