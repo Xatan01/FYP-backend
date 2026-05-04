@@ -165,8 +165,6 @@ class QuizService:
         ).scalar_one_or_none()
         if not progress:
             raise HTTPException(status_code=409, detail="Progress not initialized")
-        if progress.stage not in {"content", "quiz"}:
-            raise HTTPException(409, "Quiz not allowed at this stage")
 
         await ProgressService.ensure_subtopic_is_unlocked(
             db,
@@ -192,7 +190,9 @@ class QuizService:
             attempt_number,
         )
 
-        if progress.stage == "content":
+        # Once lesson content is unlocked, quiz access should follow that unlock state.
+        # We still keep the max-attempt guard above and transition into quiz stage here.
+        if progress.stage != "quiz":
             progress.stage = "quiz"
             await db.commit()
 
